@@ -222,7 +222,7 @@ def display_ranking():
                     if latest_price:
                         total_value += latest_price * quantity
         ranking_data.append((username, total_value, owned, money))
-    ranking_data.sort(key=lambda x: x[1], reverse=True)
+    ranking_data.sort(key=lambda x: (x[1], -x[3]), reverse=True)
     st.write("User Rankings:")
     for i, (username, total_value, owned, money) in enumerate(ranking_data):
         st.write(f"{i + 1}. {username}: \${int(total_value)} (\${int(money)}, {', '.join(f'{n.split()[0]} {owned[n]}' for n in owned)})")
