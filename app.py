@@ -23,11 +23,10 @@ def get_manager():
 
 cookie_manager = get_manager()
 
-'''
-st.subheader("All Cookies:")
-cookies = cookie_manager.get_all()
-st.write(cookies)
-'''
+#st.subheader("All Cookies:")
+#cookies = cookie_manager.get_all()
+#st.write(cookies)
+
 
 # Initialize session state for the logged-in user
 if 'logged_in_user' not in st.session_state:
