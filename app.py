@@ -7,6 +7,7 @@ import pandas as pd
 import schedule
 import time
 import os
+import altair as alt
 import extra_streamlit_components as stx
 
 # Constants
@@ -85,7 +86,12 @@ class Stock:
             df = pd.DataFrame(history, columns=["Time", "Rating"])
             df["Time"] = pd.to_datetime(df["Time"])
             df.set_index("Time", inplace=True)
-            st.line_chart(df["Rating"])
+            # st.line_chart(df["Rating"])
+            chart = alt.Chart(df.reset_index()).mark_line().encode(
+                x='Time',
+                y=alt.Y('Rating', scale=alt.Scale(zero=False)),
+            )
+            st.altair_chart(chart, use_container_width=True)
 
 # Initialize the stocks
 stocks = [
@@ -133,6 +139,7 @@ def handle_user():
                 st.rerun()
             else:
                 st.error("Incorrect password. Please try again.")
+                st.text("비밀번호를 잊으셨나요? 관리자에게 문의하세요.")
     return None
 
 # Function to update user data in SQLite
@@ -288,15 +295,16 @@ def main():
             menu = st.sidebar.selectbox("Menu", ["Trade", "Overview", "Ranking", "Change Password"])
             if menu == "Trade":
                 stock_choice = st.selectbox("Select stock to trade", [stock.name for stock in stocks])
+                current_st = None
                 for sst in stocks:
                     if sst.name == stock_choice:
+                        current_st = sst
                         buy_price = sst.update_stock_values()
                 st.subheader(f"현재 {stock_choice} 가격: {buy_price}")
                 st.write(f"Current Balance: ${int(st.session_state['accounts'][user]['money'])}")
 
                 # Buy stocks
                 buy_quantity = st.number_input(f"Buy {stock_choice} stocks", min_value=1, step=1)
-                # buy_price = stocks[0].update_stock_values() if stock_choice == 'hikaru' else stocks[1].update_stock_values()
                 if st.button(f"Buy {stock_choice}"):
                     total_cost = buy_price * buy_quantity
                     if st.session_state['accounts'][user]['money'] >= total_cost:
@@ -334,7 +342,7 @@ def main():
                 
                 st.write(f"Owned Stocks ({stock_choice}): {st.session_state['accounts'][user]['stocks'].get(stock_choice, 0)}")
                 st.write(f"Last updated: {time.ctime()}")
-                stocks[0].display_stock_history() if stock_choice == 'hikaru' else stocks[1].display_stock_history()
+                current_st.display_stock_history()
             elif menu == "Overview":
                 display_overview()
             elif menu == "Ranking":
