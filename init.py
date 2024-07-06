@@ -1,5 +1,5 @@
 import sqlite3
-def initalize():
+def initialize():
     DATABASE = 'stock_data.db'
 
     conn = sqlite3.connect(DATABASE)
