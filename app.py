@@ -181,7 +181,7 @@ def display_ranking():
 # Function to handle logout
 def handle_logout():
     st.session_state['logged_in_user'] = None
-    st.rerun()
+    # st.rerun()
 
 # Function to display account information for admin
 def display_account_info():
