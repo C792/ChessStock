@@ -318,6 +318,33 @@ def change_user_password():
         else:
             st.error("User not found.")
 
+def db_backup():
+    with open(DATABASE, 'rb') as f:
+        data = f.read()
+    with open(DATABASE + ".bak", 'wb') as f:
+        f.write(data)
+    st.success("Database backed up successfully.")
+
+def delete_db():
+    os.remove(DATABASE)
+    st.success("Database deleted successfully.")
+
+def db_restore():
+    with open(DATABASE + ".bak", 'rb') as f:
+        data = f.read()
+    with open(DATABASE, 'wb') as f:
+        f.write(data)
+    st.success("Database restored successfully.")
+
+def db_backup_menu():
+    st.write("Backup Database")
+    if st.button("Backup"):
+        db_backup()
+    if st.button("Delete"):
+        delete_db()
+    if st.button("Restore"):
+        db_restore()
+
 # Main app logic
 def main():
     st.title("ChesStock")
@@ -342,6 +369,8 @@ def main():
                 change_user_password()
             elif menu == "Force Unlock Database":
                 force_unlock_db()
+            elif menu == "Backup Database":
+                db_backup_menu()
         else:
             menu = st.sidebar.selectbox("Menu", ["Trade", "Overview", "Ranking", "Change Password"])
             if menu == "Trade":
@@ -406,6 +435,7 @@ def main():
         handle_user()
 
 # Schedule to update stock values every minute
+@st.cache_resource()
 def schedule_updates():
     schedule.every(10).minutes.do(lambda: [stock.update_stock_values() for stock in STOCKS])
     while True:
