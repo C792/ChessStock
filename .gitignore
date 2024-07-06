@@ -1,6 +1,7 @@
 admin_status*
 __pycache__/
 *.db
+*.db-journal
 *.pyc
 *.pickle
 *.p

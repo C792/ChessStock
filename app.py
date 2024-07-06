@@ -95,6 +95,7 @@ def handle_user():
 
     username = st.text_input("Enter your username:")
     password = st.text_input("Enter your password:", type='password')
+    st.text("계정이 아직 없나요? 아이디와 비밀번호를 입력하면 계정 생성 버튼이 나타납니다.")
     
     if username and password:
         password_hash = hash_password(password)
@@ -251,7 +252,8 @@ def change_user_password():
 
 # Main app logic
 def main():
-    st.title("Stock Page - Chess Player Rating")
+    st.title("ChesStock")
+    st.subheader("체스 레이팅으로 거래하는 주식")
     
     user = st.session_state['logged_in_user']
     if user:
@@ -270,11 +272,15 @@ def main():
             menu = st.sidebar.selectbox("Menu", ["Trade", "Overview", "Ranking", "Change Password"])
             if menu == "Trade":
                 stock_choice = st.selectbox("Select stock to trade", [stock.name for stock in stocks])
+                for sst in stocks:
+                    if sst.name == stock_choice:
+                        buy_price = sst.update_stock_values()
+                st.subheader(f"현재 {stock_choice} 가격: {buy_price}")
                 st.write(f"Current Balance: ${int(st.session_state['accounts'][user]['money'])}")
 
                 # Buy stocks
                 buy_quantity = st.number_input(f"Buy {stock_choice} stocks", min_value=1, step=1)
-                buy_price = stocks[0].update_stock_values() if stock_choice == 'hikaru' else stocks[1].update_stock_values()
+                # buy_price = stocks[0].update_stock_values() if stock_choice == 'hikaru' else stocks[1].update_stock_values()
                 if st.button(f"Buy {stock_choice}"):
                     total_cost = buy_price * buy_quantity
                     if st.session_state['accounts'][user]['money'] >= total_cost:
