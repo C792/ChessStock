@@ -7,6 +7,7 @@ import pandas as pd
 import schedule
 import time
 import os
+import extra_streamlit_components as stx
 
 # Constants
 STARTING_MONEY = 20000
@@ -17,9 +18,20 @@ if not os.path.exists(DATABASE):
     from init import initialize
     initialize()
 
+def get_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_manager()
+
+'''
+st.subheader("All Cookies:")
+cookies = cookie_manager.get_all()
+st.write(cookies)
+'''
+
 # Initialize session state for the logged-in user
 if 'logged_in_user' not in st.session_state:
-    st.session_state['logged_in_user'] = None
+    st.session_state['logged_in_user'] = cookie_manager.get("username")
 
 # Function to initialize database connection
 def get_db_connection():
@@ -110,6 +122,7 @@ def handle_user():
                 st.session_state['accounts'][username] = {'password': password_hash, 'money': STARTING_MONEY, 'stocks': {}}
                 st.success(f"Account created for {username} with ${STARTING_MONEY}.")
                 st.session_state['logged_in_user'] = username
+                cookie_manager.set("username", username)
                 st.rerun()
         else:
             stored_password_hash = existing_user[1]
@@ -117,6 +130,7 @@ def handle_user():
                 st.session_state['accounts'][username] = {'password': password_hash, 'money': existing_user[2], 'stocks': load_user_stocks(username)}
                 st.success(f"Welcome back, {username}!")
                 st.session_state['logged_in_user'] = username
+                cookie_manager.set("username", username)
                 st.rerun()
             else:
                 st.error("Incorrect password. Please try again.")
@@ -167,7 +181,7 @@ def load_all_users():
 def display_overview():
     for stock in stocks:
         rating = stock.update_stock_values()
-        st.write(f"Latest Blitz Rating of {stock.name.capitalize()}: {rating}")
+        st.write(f"Latest Rating of {stock.name.capitalize()}: {rating}")
         stock.display_stock_history()
 
 # Function to display the ranking of users
@@ -182,6 +196,7 @@ def display_ranking():
 # Function to handle logout
 def handle_logout():
     st.session_state['logged_in_user'] = None
+    cookie_manager.delete('username')
     # st.rerun()
 
 # Function to display account information for admin
@@ -256,6 +271,8 @@ def main():
     st.subheader("체스 레이팅으로 거래하는 주식")
     
     user = st.session_state['logged_in_user']
+    if not user:
+        user = cookie_manager.get("username")
     if user:
         st.sidebar.write(f"User: {user}")
         st.sidebar.button("Logout", on_click=handle_logout)
