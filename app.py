@@ -117,7 +117,7 @@ def force_unlock_db():
         st.success("Database connection re-established.")
     except Exception as e:
         st.error(f"Failed to force unlock the database: {e}")
-    stop_threads = False
+    # stop_threads = False
 # Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -327,6 +327,8 @@ def main():
         st.sidebar.button("Logout", on_click=handle_logout)
 
         if user == ADMIN_USERNAME:
+            global stop_threads
+            stop_threads = True
             menu = st.sidebar.selectbox("Menu", ["Retrieve Password", "Delete Account", "Change User Password", "Force Unlock Database"])
             if menu == "Retrieve Password":
                 display_account_info()
