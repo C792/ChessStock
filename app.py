@@ -96,10 +96,10 @@ class Stock:
 
 # Initialize the stocks
 STOCKS = [
-    Stock('임재휘 불릿', 'bullet', "limbaksa"),
+    Stock('임재휘 불렛', 'bullet', "limbaksa"),
     Stock('송이안 블리츠', 'blitz', "tookavooo"),
     Stock('변상훈 래피드', 'rapid', "ekdn55"),
-    Stock('조현욱 불릿', 'bullet', "telperion0715")
+    Stock('조현욱 불렛', 'bullet', "telperion0715")
 ]
 stop_threads = False
 def force_unlock_db():
