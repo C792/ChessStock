@@ -9,6 +9,7 @@ import time
 import os
 import altair as alt
 import extra_streamlit_components as stx
+from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx, add_script_run_ctx
 import threading
 
 # Constants
@@ -106,6 +107,11 @@ def force_unlock_db():
         conn.close()
         st.warning("Database connection closed to force unlock. Reconnecting...")
         conn = sqlite3.connect(DATABASE, check_same_thread=False)
+        with conn.futures.ThreadPoolExecutor() as executor:
+            executor.map()
+
+            for t in executor._threads:
+                add_script_run_ctx(t)
         st.success("Database connection re-established.")
     except Exception as e:
         st.error(f"Failed to force unlock the database: {e}")
