@@ -9,6 +9,7 @@ import time
 import os
 import altair as alt
 import extra_streamlit_components as stx
+import threading
 
 # Constants
 STARTING_MONEY = 20000
@@ -24,11 +25,6 @@ def get_manager():
 
 cookie_manager = get_manager()
 
-#st.subheader("All Cookies:")
-#cookies = cookie_manager.get_all()
-#st.write(cookies)
-
-
 # Initialize session state for the logged-in user
 if 'logged_in_user' not in st.session_state:
     st.session_state['logged_in_user'] = cookie_manager.get("username")
@@ -37,8 +33,9 @@ if 'logged_in_user' not in st.session_state:
 def get_db_connection():
     return sqlite3.connect(DATABASE, check_same_thread=False)
 
-# Initialize database connection
+# Initialize database connection and threading lock
 conn = get_db_connection()
+db_lock = threading.Lock()
 
 # Stock class to handle each stock
 class Stock:
@@ -53,13 +50,14 @@ class Stock:
         self.create_tables()
 
     def create_tables(self):
-        self.db_conn.execute(f'''
-            CREATE TABLE IF NOT EXISTS {self.dbname}_history (
-                timestamp TEXT, 
-                price REAL
-            )
-        ''')
-        self.db_conn.commit()
+        with db_lock:
+            self.db_conn.execute(f'''
+                CREATE TABLE IF NOT EXISTS {self.dbname}_history (
+                    timestamp TEXT, 
+                    price REAL
+                )
+            ''')
+            self.db_conn.commit()
 
     def fetch_latest_rating(self):
         try:
@@ -73,20 +71,21 @@ class Stock:
     def update_stock_values(self):
         rating = self.fetch_latest_rating()
         if rating is not None:
-            self.db_conn.execute(f'INSERT INTO {self.dbname}_history VALUES (?, ?)', 
-                                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
-            self.db_conn.commit()
+            with db_lock:
+                self.db_conn.execute(f'INSERT INTO {self.dbname}_history VALUES (?, ?)', 
+                                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
+                self.db_conn.commit()
         return rating
 
     def display_stock_history(self):
-        c = self.db_conn.cursor()
-        c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp ASC')
-        history = c.fetchall()
+        with db_lock:
+            c = self.db_conn.cursor()
+            c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp ASC')
+            history = c.fetchall()
         if history:
             df = pd.DataFrame(history, columns=["Time", "Rating"])
             df["Time"] = pd.to_datetime(df["Time"])
             df.set_index("Time", inplace=True)
-            # st.line_chart(df["Rating"])
             chart = alt.Chart(df.reset_index()).mark_line().encode(
                 x='Time',
                 y=alt.Y('Rating', scale=alt.Scale(zero=False)),
@@ -94,12 +93,22 @@ class Stock:
             st.altair_chart(chart, use_container_width=True)
 
 # Initialize the stocks
-stocks = [
+STOCKS = [
     Stock('임재휘 불릿', 'bullet', "limbaksa"),
     Stock('송이안 블리츠', 'blitz', "tookavooo"),
     Stock('변상훈 래피드', 'rapid', "ekdn55"),
     Stock('조현욱 불릿', 'bullet', "telperion0715")
 ]
+
+def force_unlock_db():
+    try:
+        global conn
+        conn.close()
+        st.warning("Database connection closed to force unlock. Reconnecting...")
+        conn = sqlite3.connect(DATABASE, check_same_thread=False)
+        st.success("Database connection re-established.")
+    except Exception as e:
+        st.error(f"Failed to force unlock the database: {e}")
 
 # Function to hash passwords
 def hash_password(password):
@@ -116,14 +125,16 @@ def handle_user():
     
     if username and password:
         password_hash = hash_password(password)
-        c = conn.cursor()
-        c.execute('SELECT * FROM accounts WHERE username=?', (username,))
-        existing_user = c.fetchone()
+        with db_lock:
+            c = conn.cursor()
+            c.execute('SELECT * FROM accounts WHERE username=?', (username,))
+            existing_user = c.fetchone()
         if existing_user is None:
             if st.button("Register"):
-                c.execute('INSERT INTO accounts VALUES (?, ?, ?)', 
-                          (username, password_hash, STARTING_MONEY))
-                conn.commit()
+                with db_lock:
+                    c.execute('INSERT INTO accounts VALUES (?, ?, ?)', 
+                              (username, password_hash, STARTING_MONEY))
+                    conn.commit()
                 st.session_state['accounts'][username] = {'password': password_hash, 'money': STARTING_MONEY, 'stocks': {}}
                 st.success(f"Account created for {username} with ${STARTING_MONEY}.")
                 st.session_state['logged_in_user'] = username
@@ -144,21 +155,23 @@ def handle_user():
 
 # Function to update user data in SQLite
 def update_data(username):
-    c = conn.cursor()
-    user_data = st.session_state['accounts'][username]
-    c.execute('UPDATE accounts SET money=? WHERE username=?', 
-              (user_data['money'], username))
-    c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
-    for stock_name, quantity in user_data['stocks'].items():
-        c.execute('INSERT INTO user_stocks VALUES (?, ?, ?)', 
-                  (username, stock_name, quantity))
-    conn.commit()
+    with db_lock:
+        c = conn.cursor()
+        user_data = st.session_state['accounts'][username]
+        c.execute('UPDATE accounts SET money=? WHERE username=?', 
+                  (user_data['money'], username))
+        c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
+        for stock_name, quantity in user_data['stocks'].items():
+            c.execute('INSERT INTO user_stocks VALUES (?, ?, ?)', 
+                      (username, stock_name, quantity))
+        conn.commit()
 
 # Function to load user data from SQLite
 def load_user_data(username):
-    c = conn.cursor()
-    c.execute('SELECT * FROM accounts WHERE username=?', (username,))
-    user_data = c.fetchone()
+    with db_lock:
+        c = conn.cursor()
+        c.execute('SELECT * FROM accounts WHERE username=?', (username,))
+        user_data = c.fetchone()
     if user_data:
         st.session_state['accounts'][username] = {'password': user_data[1], 'money': user_data[2], 
                                                   'stocks': load_user_stocks(username)}
@@ -175,9 +188,10 @@ def load_user_stocks(username):
 
 # Function to load all users data from SQLite
 def load_all_users():
-    c = conn.cursor()
-    c.execute('SELECT * FROM accounts')
-    users = c.fetchall()
+    with db_lock:
+        c = conn.cursor()
+        c.execute('SELECT * FROM accounts')
+        users = c.fetchall()
     accounts = {}
     for user_data in users:
         accounts[user_data[0]] = {'password': user_data[1], 'money': user_data[2], 'stocks': load_user_stocks(user_data[0])}
@@ -185,7 +199,7 @@ def load_all_users():
 
 # Function to display the overview of stocks
 def display_overview():
-    for stock in stocks:
+    for stock in STOCKS:
         rating = stock.update_stock_values()
         st.write(f"Latest Rating of {stock.name.capitalize()}: {rating}")
         stock.display_stock_history()
@@ -195,9 +209,22 @@ def display_ranking():
     c = conn.cursor()
     c.execute('SELECT username, money FROM accounts WHERE username != ? ORDER BY money DESC', (ADMIN_USERNAME,))
     ranking = c.fetchall()
+    ranking_data = []
+    for username, money in ranking:
+        user_stocks = load_user_stocks(username)
+        total_value = money
+        for stock_name, quantity in user_stocks.items():
+            for stock in STOCKS:
+                if stock.name == stock_name:
+                    latest_price = stock.fetch_latest_rating()
+                    if latest_price:
+                        total_value += latest_price * quantity
+        ranking_data.append((username, total_value))
+    ranking_data.sort(key=lambda x: x[1], reverse=True)
     st.write("User Rankings:")
-    for i, (username, money) in enumerate(ranking):
-        st.write(f"{i + 1}. {username}: ${int(money)}")
+    for i, (username, total_value) in enumerate(ranking_data):
+        st.write(f"{i + 1}. {username}: ${int(total_value)}")
+
 
 # Function to handle logout
 def handle_logout():
@@ -209,9 +236,10 @@ def handle_logout():
 def display_account_info():
     username = st.text_input("Enter the username to retrieve password:")
     if st.button("Retrieve Password"):
-        c = conn.cursor()
-        c.execute('SELECT password FROM accounts WHERE username=?', (username,))
-        user_data = c.fetchone()
+        with db_lock:
+            c = conn.cursor()
+            c.execute('SELECT password FROM accounts WHERE username=?', (username,))
+            user_data = c.fetchone()
         if user_data:
             st.write(f"Password hash for {username}: {user_data[0]}")
         else:
@@ -221,10 +249,11 @@ def display_account_info():
 def delete_account():
     username = st.text_input("Enter the username to delete:")
     if st.button("Delete Account"):
-        c = conn.cursor()
-        c.execute('DELETE FROM accounts WHERE username=?', (username,))
-        c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
-        conn.commit()
+        with db_lock:
+            c = conn.cursor()
+            c.execute('DELETE FROM accounts WHERE username=?', (username,))
+            c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
+            conn.commit()
         st.success(f"Deleted account for {username}")
 
 # Function to change the password
@@ -239,13 +268,15 @@ def change_password():
 
         user = st.session_state['logged_in_user']
         current_password_hash = hash_password(current_password)
-        c = conn.cursor()
-        c.execute('SELECT password FROM accounts WHERE username=?', (user,))
-        user_data = c.fetchone()
+        with db_lock:
+            c = conn.cursor()
+            c.execute('SELECT password FROM accounts WHERE username=?', (user,))
+            user_data = c.fetchone()
         if user_data and user_data[0] == current_password_hash:
             new_password_hash = hash_password(new_password)
-            c.execute('UPDATE accounts SET password=? WHERE username=?', (new_password_hash, user))
-            conn.commit()
+            with db_lock:
+                c.execute('UPDATE accounts SET password=? WHERE username=?', (new_password_hash, user))
+                conn.commit()
             st.success("Password changed successfully.")
         else:
             st.error("Current password is incorrect.")
@@ -260,13 +291,15 @@ def change_user_password():
             st.error("New passwords do not match.")
             return
 
-        c = conn.cursor()
-        c.execute('SELECT username FROM accounts WHERE username=?', (username,))
-        user_data = c.fetchone()
+        with db_lock:
+            c = conn.cursor()
+            c.execute('SELECT username FROM accounts WHERE username=?', (username,))
+            user_data = c.fetchone()
         if user_data:
             new_password_hash = hash_password(new_password)
-            c.execute('UPDATE accounts SET password=? WHERE username=?', (new_password_hash, username))
-            conn.commit()
+            with db_lock:
+                c.execute('UPDATE accounts SET password=? WHERE username=?', (new_password_hash, username))
+                conn.commit()
             st.success(f"Password for {username} changed successfully.")
         else:
             st.error("User not found.")
@@ -284,19 +317,21 @@ def main():
         st.sidebar.button("Logout", on_click=handle_logout)
 
         if user == ADMIN_USERNAME:
-            menu = st.sidebar.selectbox("Menu", ["Retrieve Password", "Delete Account", "Change User Password"])
+            menu = st.sidebar.selectbox("Menu", ["Retrieve Password", "Delete Account", "Change User Password", "Force Unlock Database"])
             if menu == "Retrieve Password":
                 display_account_info()
             elif menu == "Delete Account":
                 delete_account()
             elif menu == "Change User Password":
                 change_user_password()
+            elif menu == "Force Unlock Database":
+                force_unlock_db()
         else:
             menu = st.sidebar.selectbox("Menu", ["Trade", "Overview", "Ranking", "Change Password"])
             if menu == "Trade":
-                stock_choice = st.selectbox("Select stock to trade", [stock.name for stock in stocks])
+                stock_choice = st.selectbox("Select stock to trade", [stock.name for stock in STOCKS])
                 current_st = None
-                for sst in stocks:
+                for sst in STOCKS:
                     if sst.name == stock_choice:
                         current_st = sst
                         buy_price = sst.update_stock_values()
@@ -313,10 +348,11 @@ def main():
                             st.session_state['accounts'][user]['stocks'][stock_choice] += buy_quantity
                         else:
                             st.session_state['accounts'][user]['stocks'][stock_choice] = buy_quantity
-                        c = conn.cursor()
-                        c.execute('INSERT INTO transactions VALUES (?, ?, ?, ?, ?)', 
-                                  (user, stock_choice, buy_quantity, buy_price, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                        conn.commit()
+                        with db_lock:
+                            c = conn.cursor()
+                            c.execute('INSERT INTO transactions VALUES (?, ?, ?, ?, ?)', 
+                                      (user, stock_choice, buy_quantity, buy_price, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                            conn.commit()
                         st.success(f"Bought {buy_quantity} stocks of {stock_choice} for ${total_cost}.")
                         update_data(user)
                         st.rerun()
@@ -330,10 +366,11 @@ def main():
                         revenue = buy_price * sell_quantity
                         st.session_state['accounts'][user]['money'] += revenue
                         st.session_state['accounts'][user]['stocks'][stock_choice] -= sell_quantity
-                        c = conn.cursor()
-                        c.execute('INSERT INTO transactions VALUES (?, ?, ?, ?, ?)', 
-                                  (user, stock_choice, -sell_quantity, buy_price, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                        conn.commit()
+                        with db_lock:
+                            c = conn.cursor()
+                            c.execute('INSERT INTO transactions VALUES (?, ?, ?, ?, ?)', 
+                                      (user, stock_choice, -sell_quantity, buy_price, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                            conn.commit()
                         st.success(f"Sold {sell_quantity} stocks of {stock_choice} for ${revenue}.")
                         update_data(user)
                         st.rerun()
@@ -354,13 +391,11 @@ def main():
 
 # Schedule to update stock values every minute
 def schedule_updates():
-    schedule.every().minute.do(lambda: [stock.update_stock_values() for stock in stocks])
+    schedule.every(10).minutes.do(lambda: [stock.update_stock_values() for stock in STOCKS])
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 if __name__ == "__main__":
-    import threading
-    conn = sqlite3.connect(DATABASE, check_same_thread=False)
     threading.Thread(target=schedule_updates).start()
     main()
