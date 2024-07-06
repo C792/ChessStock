@@ -101,8 +101,10 @@ STOCKS = [
     Stock('변상훈 래피드', 'rapid', "ekdn55"),
     Stock('조현욱 불릿', 'bullet', "telperion0715")
 ]
-
+stop_threads = False
 def force_unlock_db():
+    global stop_threads
+    stop_threads = True
     try:
         global conn
         conn.close()
@@ -115,7 +117,7 @@ def force_unlock_db():
         st.success("Database connection re-established.")
     except Exception as e:
         st.error(f"Failed to force unlock the database: {e}")
-
+    stop_threads = False
 # Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -403,6 +405,7 @@ def schedule_updates():
     while True:
         schedule.run_pending()
         time.sleep(1)
+        if stop_threads: break
 
 if __name__ == "__main__":
     threading.Thread(target=schedule_updates).start()
