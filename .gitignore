@@ -1,0 +1,7 @@
+admin_status*
+__pycache__/
+*.db
+*.pyc
+*.pickle
+*.p
+*.pk
