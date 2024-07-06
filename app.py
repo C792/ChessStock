@@ -10,6 +10,7 @@ import os
 import altair as alt
 import extra_streamlit_components as stx
 from streamlit.runtime.scriptrunner import add_script_run_ctx
+from concurrent.futures import ThreadPoolExecutor
 import threading
 
 # Constants
@@ -107,7 +108,7 @@ def force_unlock_db():
         conn.close()
         st.warning("Database connection closed to force unlock. Reconnecting...")
         conn = sqlite3.connect(DATABASE, check_same_thread=False)
-        with conn.futures.ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor() as executor:
             executor.map()
 
             for t in executor._threads:
