@@ -405,6 +405,6 @@ def schedule_updates():
         time.sleep(1)
 
 if __name__ == "__main__":
-    # threading.Thread(target=schedule_updates).start()
-    schedule_updates()
+    threading.Thread(target=schedule_updates).start()
+    # schedule_updates()
     main()
