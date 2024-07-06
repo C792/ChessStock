@@ -114,6 +114,10 @@ def force_unlock_db():
             # executor.map()
             for t in executor._threads:
                 add_script_run_ctx(t)
+        db_lock.acquire()
+        if st.button("Unlock Database"):
+            db_lock.release()
+            st.success("Database unlocked.")
         st.success("Database connection re-established.")
     except Exception as e:
         st.error(f"Failed to force unlock the database: {e}")
