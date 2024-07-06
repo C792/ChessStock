@@ -328,7 +328,7 @@ def main():
 
         if user == ADMIN_USERNAME:
             global stop_threads
-            stop_threads = True
+            # stop_threads = True
             menu = st.sidebar.selectbox("Menu", ["Retrieve Password", "Delete Account", "Change User Password", "Force Unlock Database"])
             if menu == "Retrieve Password":
                 display_account_info()
