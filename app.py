@@ -211,19 +211,21 @@ def display_ranking():
     ranking = c.fetchall()
     ranking_data = []
     for username, money in ranking:
+        owned = {}
         user_stocks = load_user_stocks(username)
         total_value = money
         for stock_name, quantity in user_stocks.items():
+            owned[stock_name] = quantity
             for stock in STOCKS:
                 if stock.name == stock_name:
                     latest_price = stock.fetch_latest_rating()
                     if latest_price:
                         total_value += latest_price * quantity
-        ranking_data.append((username, total_value))
+        ranking_data.append((username, total_value, owned, money))
     ranking_data.sort(key=lambda x: x[1], reverse=True)
     st.write("User Rankings:")
-    for i, (username, total_value) in enumerate(ranking_data):
-        st.write(f"{i + 1}. {username}: ${int(total_value)}")
+    for i, (username, total_value, owned, money) in enumerate(ranking_data):
+        st.write(f"{i + 1}. {username}: \${int(total_value)} (\${int(money)}, {', '.join(f'{n.split()[0]} {owned[n]}' for n in owned)})")
 
 
 # Function to handle logout
@@ -340,7 +342,7 @@ def main():
 
                 # Buy stocks
                 buy_quantity = st.number_input(f"Buy {stock_choice} stocks", min_value=1, step=1)
-                if st.button(f"Buy {stock_choice}"):
+                if st.button(f"Buy {stock_choice} (-${buy_price*buy_quantity})"):
                     total_cost = buy_price * buy_quantity
                     if st.session_state['accounts'][user]['money'] >= total_cost:
                         st.session_state['accounts'][user]['money'] -= total_cost
@@ -361,7 +363,7 @@ def main():
 
                 # Sell stocks
                 sell_quantity = st.number_input(f"Sell {stock_choice} stocks", min_value=1, step=1)
-                if st.button(f"Sell {stock_choice}"):
+                if st.button(f"Sell {stock_choice} (+${buy_price*sell_quantity})"):
                     if stock_choice in st.session_state['accounts'][user]['stocks'] and st.session_state['accounts'][user]['stocks'][stock_choice] >= sell_quantity:
                         revenue = buy_price * sell_quantity
                         st.session_state['accounts'][user]['money'] += revenue
