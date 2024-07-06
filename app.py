@@ -9,7 +9,7 @@ import time
 import os
 import altair as alt
 import extra_streamlit_components as stx
-from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx, add_script_run_ctx
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 import threading
 
 # Constants
