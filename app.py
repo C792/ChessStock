@@ -109,8 +109,7 @@ def force_unlock_db():
         st.warning("Database connection closed to force unlock. Reconnecting...")
         conn = sqlite3.connect(DATABASE, check_same_thread=False)
         with ThreadPoolExecutor() as executor:
-            executor.map()
-
+            # executor.map()
             for t in executor._threads:
                 add_script_run_ctx(t)
         st.success("Database connection re-established.")
