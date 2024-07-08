@@ -68,11 +68,16 @@ class Stock:
     def update_stock_values(self):
         rating = self.fetch_latest_rating()
         if rating is not None:
-            self.db_conn.execute(f'INSERT INTO {self.dbname}_history VALUES (?, ?)', 
-                                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
-            self.db_conn.commit()
+            c = self.db_conn.cursor()
+            c.execute(f'SELECT price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1')
+            last_entry = c.fetchone()
+
+            if not last_entry or last_entry[0] != rating:
+                self.db_conn.execute(f'INSERT INTO {self.dbname}_history VALUES (?, ?)', 
+                                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
+                self.db_conn.commit()
         return rating
-    
+
     def get_rating(self):
         c = self.db_conn.cursor()
         c.execute(f'SELECT price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1')
