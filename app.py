@@ -9,9 +9,6 @@ import time
 import os
 import altair as alt
 import extra_streamlit_components as stx
-from streamlit.runtime.scriptrunner import add_script_run_ctx
-from concurrent.futures import ThreadPoolExecutor
-import threading
 
 # Constants
 STARTING_MONEY = 20000
@@ -102,27 +99,7 @@ STOCKS = [
     Stock('조현욱 불렛', 'bullet', "telperion0715"),
     Stock('송이안 불렛', 'bullet', "tookavooo"),
 ]
-stop_threads = False
-def force_unlock_db():
-    global stop_threads
-    stop_threads = True
-    try:
-        global conn
-        conn.close()
-        st.warning("Database connection closed to force unlock. Reconnecting...")
-        conn = sqlite3.connect(DATABASE, check_same_thread=False)
-        with ThreadPoolExecutor() as executor:
-            # executor.map()
-            for t in executor._threads:
-                add_script_run_ctx(t)
-        # db_lock.acquire()
-        if st.button("Unlock Database"):
-            # db_lock.release()
-            st.success("Database unlocked.")
-        st.success("Database connection re-established.")
-    except Exception as e:
-        st.error(f"Failed to force unlock the database: {e}")
-    # stop_threads = False
+
 # Function to hash passwords
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -319,33 +296,6 @@ def change_user_password():
         else:
             st.error("User not found.")
 
-def db_backup():
-    with open(DATABASE, 'rb') as f:
-        data = f.read()
-    with open(DATABASE + ".bak", 'wb') as f:
-        f.write(data)
-    st.success("Database backed up successfully.")
-
-def delete_db():
-    os.remove(DATABASE)
-    st.success("Database deleted successfully.")
-
-def db_restore():
-    with open(DATABASE + ".bak", 'rb') as f:
-        data = f.read()
-    with open(DATABASE, 'wb') as f:
-        f.write(data)
-    st.success("Database restored successfully.")
-
-def db_backup_menu():
-    st.write("Backup Database")
-    if st.button("Backup"):
-        db_backup()
-    if st.button("Delete"):
-        delete_db()
-    if st.button("Restore"):
-        db_restore()
-
 # Main app logic
 def main():
     st.title("ChesStock")
@@ -361,17 +311,18 @@ def main():
         if user == ADMIN_USERNAME:
             global stop_threads
             # stop_threads = True
-            menu = st.sidebar.selectbox("Menu", ["Retrieve Password", "Delete Account", "Change User Password", "Force Unlock Database"])
+            menu = st.sidebar.selectbox("Menu", ["Retrieve Password", "Delete Account", "Change User Password", "Update"])
             if menu == "Retrieve Password":
                 display_account_info()
             elif menu == "Delete Account":
                 delete_account()
             elif menu == "Change User Password":
                 change_user_password()
-            elif menu == "Force Unlock Database":
-                force_unlock_db()
-            elif menu == "Backup Database":
-                db_backup_menu()
+            elif menu == "Update":
+                if st.button("Update!!"):
+                    st.cache_resource.clear()
+                    st.success("Updated successfully.")
+                    schedule_updates()
         else:
             menu = st.sidebar.selectbox("Menu", ["Trade", "Overview", "Ranking", "Change Password"])
             if menu == "Trade":
@@ -442,9 +393,6 @@ def schedule_updates():
     while True:
         schedule.run_pending()
         time.sleep(1)
-        if stop_threads: break
 
 if __name__ == "__main__":
-    # threading.Thread(target=schedule_updates).start()
-    # schedule_updates()
     main()
