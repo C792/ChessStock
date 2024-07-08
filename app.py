@@ -69,11 +69,16 @@ class Stock:
         rating = self.fetch_latest_rating()
         if rating is not None:
             c = self.db_conn.cursor()
-            c.execute(f'SELECT price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1')
+            c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1')
             last_entry = c.fetchone()
 
-            if not last_entry or last_entry[0] != rating:
-                self.db_conn.execute(f'INSERT INTO {self.dbname}_history VALUES (?, ?)', 
+            if not last_entry or last_entry[1] != rating:
+                if last_entry:
+                    # Update the timestamp of the last same value entry before the change
+                    self.db_conn.execute(f'UPDATE {self.dbname}_history SET timestamp = ? WHERE timestamp = ?',
+                                         (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), last_entry[0]))
+                # Insert the new value
+                self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
                                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
                 self.db_conn.commit()
         return rating
@@ -97,6 +102,32 @@ class Stock:
                 y=alt.Y('Rating', scale=alt.Scale(zero=False)),
             )
             st.altair_chart(chart, use_container_width=True)
+        print(len(history))
+    
+    def compress_db(self):
+        c = self.db_conn.cursor()
+        c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp ASC')
+        history = c.fetchall()
+        
+        if not history: return
+        
+        filtered_history = []
+        last_price = history[0][1]
+        filtered_history.append(history[0])
+        
+        for i in range(1, len(history)):
+            if history[i][1] != last_price:
+                filtered_history.append(history[i - 1])
+                filtered_history.append(history[i])
+                last_price = history[i][1]
+        filtered_history.append(history[-1])
+        
+        self.db_conn.execute(f'DELETE FROM {self.dbname}_history')
+        
+        for entry in filtered_history:
+            self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', entry)
+        
+        self.db_conn.commit()
 
 # Initialize the stocks
 STOCKS = [
@@ -335,6 +366,17 @@ def manage_user_balance(username, amount):
     action = "added to" if amount > 0 else "deducted from"
     st.success(f"${abs(amount)} has been {action} {username}'s balance")
 
+def admin_update():
+    if st.button("Update!!"):
+        st.cache_resource.clear()
+        st.success("Updated successfully.")
+        schedule_updates()
+    if st.button("COMPRESS!!"):
+        for stock in STOCKS:
+            stock.compress_db()
+        st.success("Changes filtered and saved successfully.")
+
+
 def admin_manager():
     st.subheader("Clear User Stocks")
     username_clear = st.text_input("Enter the username to clear stocks:")
@@ -382,10 +424,7 @@ def main():
             elif menu == "Change User Password":
                 change_user_password()
             elif menu == "Update":
-                if st.button("Update!!"):
-                    st.cache_resource.clear()
-                    st.success("Updated successfully.")
-                    schedule_updates()
+                admin_update()
             elif menu == "Stock Manager":
                 admin_manager()
         else:
