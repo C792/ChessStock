@@ -115,7 +115,7 @@ def handle_user():
     password = st.text_input("Enter your password:", type='password')
     st.text("계정이 아직 없나요? 아이디와 비밀번호를 입력하면 계정 생성 버튼이 나타납니다.")
     
-    if username and password:
+    if username and password or st.button("Login"):
         password_hash = hash_password(password)
         c = conn.cursor()
         c.execute('SELECT * FROM accounts WHERE username=?', (username,))
