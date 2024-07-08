@@ -34,7 +34,6 @@ def get_db_connection():
 
 # Initialize database connection and threading lock
 conn = get_db_connection()
-# db_lock = threading.Lock()
 
 # Stock class to handle each stock
 class Stock:
@@ -49,14 +48,13 @@ class Stock:
         self.create_tables()
 
     def create_tables(self):
-        # with db_lock:
-            self.db_conn.execute(f'''
-                CREATE TABLE IF NOT EXISTS {self.dbname}_history (
-                    timestamp TEXT, 
-                    price REAL
-                )
-            ''')
-            self.db_conn.commit()
+        self.db_conn.execute(f'''
+            CREATE TABLE IF NOT EXISTS {self.dbname}_history (
+                timestamp TEXT, 
+                price REAL
+            )
+        ''')
+        self.db_conn.commit()
 
     def fetch_latest_rating(self):
         try:
@@ -70,14 +68,18 @@ class Stock:
     def update_stock_values(self):
         rating = self.fetch_latest_rating()
         if rating is not None:
-            # with db_lock:
-                self.db_conn.execute(f'INSERT INTO {self.dbname}_history VALUES (?, ?)', 
-                                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
-                self.db_conn.commit()
+            self.db_conn.execute(f'INSERT INTO {self.dbname}_history VALUES (?, ?)', 
+                                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
+            self.db_conn.commit()
         return rating
+    
+    def get_rating(self):
+        c = self.db_conn.cursor()
+        c.execute(f'SELECT price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1')
+        rating = c.fetchone()
+        return int(rating[0]) if rating else None
 
     def display_stock_history(self):
-        # with db_lock:
         c = self.db_conn.cursor()
         c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp ASC')
         history = c.fetchall()
@@ -115,13 +117,11 @@ def handle_user():
     
     if username and password:
         password_hash = hash_password(password)
-        # with db_lock:
         c = conn.cursor()
         c.execute('SELECT * FROM accounts WHERE username=?', (username,))
         existing_user = c.fetchone()
         if existing_user is None:
             if st.button("Register"):
-                # with db_lock:
                 c.execute('INSERT INTO accounts VALUES (?, ?, ?)', 
                             (username, password_hash, STARTING_MONEY))
                 conn.commit()
@@ -144,8 +144,7 @@ def handle_user():
     return None
 
 # Function to update user data in SQLite
-def update_data(username):
-    # with db_lock:
+def update_data(username):    
     c = conn.cursor()
     user_data = st.session_state['accounts'][username]
     c.execute('UPDATE accounts SET money=? WHERE username=?', 
@@ -154,11 +153,12 @@ def update_data(username):
     for stock_name, quantity in user_data['stocks'].items():
         c.execute('INSERT INTO user_stocks VALUES (?, ?, ?)', 
                     (username, stock_name, quantity))
+    # in user_stocks, remove stocks with quantity 0
+    c.execute('DELETE FROM user_stocks WHERE quantity=0')
     conn.commit()
 
 # Function to load user data from SQLite
 def load_user_data(username):
-    # with db_lock:
     c = conn.cursor()
     c.execute('SELECT * FROM accounts WHERE username=?', (username,))
     user_data = c.fetchone()
@@ -178,7 +178,7 @@ def load_user_stocks(username):
 
 # Function to load all users data from SQLite
 def load_all_users():
-    # with db_lock:
+    
     c = conn.cursor()
     c.execute('SELECT * FROM accounts')
     users = c.fetchall()
@@ -208,14 +208,17 @@ def display_ranking():
             owned[stock_name] = quantity
             for stock in STOCKS:
                 if stock.name == stock_name:
-                    latest_price = stock.fetch_latest_rating()
+                    latest_price = stock.get_rating()
                     if latest_price:
                         total_value += latest_price * quantity
         ranking_data.append((username, total_value, owned, money))
     ranking_data.sort(key=lambda x: (x[1], x[3]), reverse=True)
     st.write("User Rankings:")
     for i, (username, total_value, owned, money) in enumerate(ranking_data):
-        st.write(f"{i + 1}. {username}: \${int(total_value)} (\${int(money)}, {', '.join(f'{n.split()[0]} {owned[n]}' for n in owned)})")
+        own_str = ', '.join(f'{n.split()[0]} {owned[n]}' for n in owned if owned[n])
+        towrite = f"{i + 1}. {username}: \${int(total_value)}"
+        if own_str: towrite += f"(\${int(money)}, {own_str})"
+        st.write(towrite)
 
 
 # Function to handle logout
@@ -228,7 +231,7 @@ def handle_logout():
 def display_account_info():
     username = st.text_input("Enter the username to retrieve password:")
     if st.button("Retrieve Password"):
-        # with db_lock:
+        
         c = conn.cursor()
         c.execute('SELECT password FROM accounts WHERE username=?', (username,))
         user_data = c.fetchone()
@@ -241,7 +244,7 @@ def display_account_info():
 def delete_account():
     username = st.text_input("Enter the username to delete:")
     if st.button("Delete Account"):
-        # with db_lock:
+        
         c = conn.cursor()
         c.execute('DELETE FROM accounts WHERE username=?', (username,))
         c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
@@ -260,13 +263,13 @@ def change_password():
 
         user = st.session_state['logged_in_user']
         current_password_hash = hash_password(current_password)
-        # with db_lock:
+        
         c = conn.cursor()
         c.execute('SELECT password FROM accounts WHERE username=?', (user,))
         user_data = c.fetchone()
         if user_data and user_data[0] == current_password_hash:
             new_password_hash = hash_password(new_password)
-            # with db_lock:
+            
             c.execute('UPDATE accounts SET password=? WHERE username=?', (new_password_hash, user))
             conn.commit()
             st.success("Password changed successfully.")
@@ -283,20 +286,73 @@ def change_user_password():
             st.error("New passwords do not match.")
             return
 
-        # with db_lock:
         c = conn.cursor()
         c.execute('SELECT username FROM accounts WHERE username=?', (username,))
         user_data = c.fetchone()
         if user_data:
             new_password_hash = hash_password(new_password)
-            # with db_lock:
             c.execute('UPDATE accounts SET password=? WHERE username=?', (new_password_hash, username))
             conn.commit()
             st.success(f"Password for {username} changed successfully.")
         else:
             st.error("User not found.")
 
-# Main app logic
+# Function to clear all stocks of a specific user
+def clear_user_stocks(username):
+    c = conn.cursor()
+    c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
+    conn.commit()
+    st.session_state['accounts'][username]['stocks'] = {}
+    st.success(f"Cleared all stocks for {username}")
+
+# Function to give specific amount of any stock to a user
+def grant_stocks(username, stock_choice, quantity):
+    if stock_choice:
+        c = conn.cursor()
+        if stock_choice.name in st.session_state['accounts'][username]['stocks']:
+            st.session_state['accounts'][username]['stocks'][stock_choice.name] += quantity
+        else:
+            st.session_state['accounts'][username]['stocks'][stock_choice.name] = quantity
+        c.execute('INSERT INTO user_stocks VALUES (?, ?, ?)',
+                    (username, stock_choice.name, quantity))
+        conn.commit()
+        st.success(f"Granted {quantity} of {stock_choice.name} to {username}")
+        return
+    st.error("Stock not found.")
+
+# Function to manage user balance
+def manage_user_balance(username, amount):
+    c = conn.cursor()
+    st.session_state['accounts'][username]['money'] += amount
+    c.execute('UPDATE accounts SET money=? WHERE username=?', 
+                (st.session_state['accounts'][username]['money'], username))
+    conn.commit()
+    action = "added to" if amount > 0 else "deducted from"
+    st.success(f"${abs(amount)} has been {action} {username}'s balance")
+
+def admin_manager():
+    st.subheader("Clear User Stocks")
+    username_clear = st.text_input("Enter the username to clear stocks:")
+    if st.button("Clear Stocks"):
+        clear_user_stocks(username_clear)
+
+    st.subheader("Give User Stocks")
+    username_give = st.text_input("Enter the username to give stocks:")
+    stock_name = st.selectbox("Select stock", [stock.name for stock in STOCKS])
+    for i in STOCKS:
+        if i.name == stock_name:
+            selected_stock = i
+            break
+    quantity = st.number_input("Enter quantity to give:", min_value=1, step=1)
+    if st.button("Give Stocks"):
+        grant_stocks(username_give, selected_stock, quantity)
+    st.subheader("Manage User Balance")
+    username_balance = st.text_input("Enter the username to manage balance:")
+    amount = st.number_input("Enter amount to add/deduct (use negative for deduction):", step=100)
+    if st.button("Update Balance"):
+        manage_user_balance(username_balance, amount)
+
+# Update the main function to include the admin page
 def main():
     st.title("ChesStock")
     st.subheader("체스 레이팅으로 거래하는 주식")
@@ -311,9 +367,11 @@ def main():
         if user == ADMIN_USERNAME:
             global stop_threads
             # stop_threads = True
-            menu = st.sidebar.selectbox("Menu", ["Retrieve Password", "Delete Account", "Change User Password", "Update"])
+            menu = st.sidebar.selectbox("Menu", ["Ranking", "Retrieve Password", "Delete Account", "Change User Password", "Update", "Stock Manager"])
             if menu == "Retrieve Password":
                 display_account_info()
+            elif menu == "Ranking":
+                display_ranking()
             elif menu == "Delete Account":
                 delete_account()
             elif menu == "Change User Password":
@@ -323,6 +381,8 @@ def main():
                     st.cache_resource.clear()
                     st.success("Updated successfully.")
                     schedule_updates()
+            elif menu == "Stock Manager":
+                admin_manager()
         else:
             menu = st.sidebar.selectbox("Menu", ["Trade", "Overview", "Ranking", "Change Password"])
             if menu == "Trade":
@@ -331,7 +391,7 @@ def main():
                 for sst in STOCKS:
                     if sst.name == stock_choice:
                         current_st = sst
-                        buy_price = sst.update_stock_values()
+                        buy_price = sst.get_rating()
                 st.subheader(f"현재 {stock_choice} 가격: {buy_price}")
                 st.write(f"Current Balance: ${int(st.session_state['accounts'][user]['money'])}")
 
@@ -345,7 +405,6 @@ def main():
                             st.session_state['accounts'][user]['stocks'][stock_choice] += buy_quantity
                         else:
                             st.session_state['accounts'][user]['stocks'][stock_choice] = buy_quantity
-                        # with db_lock:
                         c = conn.cursor()
                         c.execute('INSERT INTO transactions VALUES (?, ?, ?, ?, ?)', 
                                     (user, stock_choice, buy_quantity, buy_price, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -363,7 +422,7 @@ def main():
                         revenue = buy_price * sell_quantity
                         st.session_state['accounts'][user]['money'] += revenue
                         st.session_state['accounts'][user]['stocks'][stock_choice] -= sell_quantity
-                        # with db_lock:
+                        
                         c = conn.cursor()
                         c.execute('INSERT INTO transactions VALUES (?, ?, ?, ?, ?)', 
                                     (user, stock_choice, -sell_quantity, buy_price, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -385,6 +444,7 @@ def main():
                 change_password()
     else:
         handle_user()
+
 
 # Schedule to update stock values every minute
 @st.cache_resource()
