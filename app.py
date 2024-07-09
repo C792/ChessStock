@@ -9,6 +9,8 @@ import time
 import os
 import altair as alt
 import extra_streamlit_components as stx
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 
 # Constants
 STARTING_MONEY = 20000
@@ -214,7 +216,6 @@ def load_user_stocks(username):
 
 # Function to load all users data from SQLite
 def load_all_users():
-    
     c = conn.cursor()
     c.execute('SELECT * FROM accounts')
     users = c.fetchall()
@@ -222,6 +223,20 @@ def load_all_users():
     for user_data in users:
         accounts[user_data[0]] = {'password': user_data[1], 'money': user_data[2], 'stocks': load_user_stocks(user_data[0])}
     return accounts
+
+# Function to display user portfolio
+def display_portfolio():
+    username = st.session_state['logged_in_user']
+    if username is None:
+        st.error("You must be logged in to view your portfolio.")
+        return
+
+    user_data = st.session_state['accounts'][username]
+    st.write(f"### Portfolio of {username}")
+    st.write(f"**Money:** ${int(user_data['money'])}")
+    st.write("**Stocks:**")
+    for stock_name, quantity in user_data['stocks'].items():
+        st.write(f"- {stock_name}: {quantity} shares")
 
 # Function to display the overview of stocks
 def display_overview():
@@ -375,6 +390,8 @@ def admin_update():
         for stock in STOCKS:
             stock.compress_db()
         st.success("Changes filtered and saved successfully.")
+    if st.button("Backup Database"):
+        backup_database()
 
 
 def admin_manager():
@@ -398,6 +415,15 @@ def admin_manager():
     amount = st.number_input("Enter amount to add/deduct (use negative for deduction):", step=100)
     if st.button("Update Balance"):
         manage_user_balance(username_balance, amount)
+
+def backup_database():
+    gauth = GoogleAuth()
+    gauth.LocalWebserverAuth()
+    drive = GoogleDrive(gauth)
+    gfile = drive.CreateFile({'title': os.path.basename(DATABASE)})
+    gfile.SetContentFile(DATABASE)
+    gfile.Upload()
+    st.success(f"Database backup uploaded to Google Drive successfully.")
 
 # Update the main function to include the admin page
 def main():
@@ -428,8 +454,10 @@ def main():
             elif menu == "Stock Manager":
                 admin_manager()
         else:
-            menu = st.sidebar.selectbox("Menu", ["Trade", "Overview", "Ranking", "Change Password"])
-            if menu == "Trade":
+            menu = st.sidebar.selectbox("Menu", ["Profile", "Trade", "Overview", "Ranking", "Change Password"])
+            if menu == "Profile":
+                display_portfolio()
+            elif menu == "Trade":
                 stock_choice = st.selectbox("Select stock to trade", [stock.name for stock in STOCKS])
                 current_st = None
                 for sst in STOCKS:

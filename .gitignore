@@ -7,3 +7,5 @@ __pycache__/
 *.p
 *.pk
 .devcontainer/
+client_secrets.json
+.streamlit/*
