@@ -100,11 +100,11 @@ class Stock:
                 # Insert the new value
                 self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
                                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
-                self.db_conn.commit()
             elif last_entry[1] == rating:
                 # Update the timestamp of the last same value entry before the change
                 self.db_conn.execute(f'UPDATE {self.dbname}_history SET timestamp = ? WHERE timestamp = ?',
                                         (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), last_entry[0]))
+            self.db_conn.commit()
         return rating
 
     def get_rating(self):
@@ -261,8 +261,8 @@ def display_portfolio():
 # Function to display the overview of stocks
 def display_overview():
     for stock in STOCKS:
-        # rating = stock.update_stock_values()
-        st.write(f"Latest Rating of {stock.name.capitalize()}: {stock.get_rating()}")
+        rating = stock.update_stock_values()
+        st.write(f"Latest Rating of {stock.name.capitalize()}: {rating}")
         stock.display_stock_history()
 
 # Function to display the ranking of users
