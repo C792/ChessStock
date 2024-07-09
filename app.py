@@ -376,7 +376,6 @@ def clear_user_stocks(username):
     c = conn.cursor()
     c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
     conn.commit()
-    st.session_state['accounts'][username]['stocks'] = {}
     st.success(f"Cleared all stocks for {username}")
 
 # Function to give specific amount of any stock to a user
