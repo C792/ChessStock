@@ -95,18 +95,12 @@ class Stock:
             c = self.db_conn.cursor()
             c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1')
             last_entry = c.fetchone()
-            second_last_entry = c.execute(f'SELECT price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1 OFFSET 1').fetchone()
-            print(second_last_entry)
-            if second_last_entry is None:
-                second_last_entry = [-1, -1]
-            if len(second_last_entry) == 1:
-                second_last_entry = [second_last_entry[0], -1]
+            second_last_entry = c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1 OFFSET 1').fetchone()
+            if second_last_entry is None: second_last_entry = [-1, -1]
             if not last_entry or last_entry[1] != rating:
-                # Insert the new value
                 self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
                                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
             elif last_entry[1] == rating == second_last_entry[1]:
-                # Update the timestamp of the last same value entry before the change
                 self.db_conn.execute(f'UPDATE {self.dbname}_history SET timestamp = ? WHERE timestamp = ?',
                                         (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), last_entry[0]))
             self.db_conn.commit()
@@ -131,8 +125,7 @@ class Stock:
                 y=alt.Y('Rating', scale=alt.Scale(zero=False)),
             )
             st.altair_chart(chart, use_container_width=True)
-        print(len(history))
-    
+
     def compress_db(self):
         c = self.db_conn.cursor()
         c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp ASC')
@@ -260,9 +253,16 @@ def display_portfolio():
             return handle_user()
 
     user_data = st.session_state['accounts'][username]
-    st.write(f"### Portfolio of {username}")
-    st.write(f"**Money:** ${int(user_data['money'])}")
-    st.write("**Stocks:**")
+    st.write(f"### {username}님의 포트폴리오")
+    total_value = int(user_data['money'])
+    for stock_name, quantity in load_user_stocks(username).items():
+        for stock in STOCKS:
+            if stock.name == stock_name:
+                latest_price = stock.get_rating()
+                if latest_price:
+                    total_value += latest_price * quantity
+    st.write(f"#### 보유금액: \${int(user_data['money'])}, 자산: \${total_value}")
+    st.write("**자산 목록:**")
     for stock_name, quantity in user_data['stocks'].items():
         st.write(f"- {stock_name}: {quantity} shares")
 
@@ -307,6 +307,7 @@ def handle_logout():
     cookie_manager = stx.CookieManager()
     cookie_manager.delete('username')
     cookie_manager = stx.CookieManager()
+    handle_user()
 
 # Function to display account information for admin
 def display_account_info():
