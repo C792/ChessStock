@@ -390,13 +390,21 @@ def grant_stocks(username, stock_choice, quantity):
     st.error("Stock not found.")
 
 # Function to manage user balance
-def manage_user_balance(username, amount):
+def manage_user_balance(username, amount, absv=True):
+    if not username:
+        st.error("Enter a username.")
+        return
     c = conn.cursor()
-    c.execute('UPDATE accounts SET money=? WHERE username=?', 
-                (amount, username))
+    if absv:
+        c.execute('UPDATE accounts SET money=? WHERE username=?', 
+                    (amount, username))
+        st.success(f"{username}'s balance has been set to ${abs(amount)} successfully.")
+    else:
+        c.execute('UPDATE accounts SET money=money+? WHERE username=?', 
+                    (amount, username))
+        action = "added to" if amount > 0 else "deducted from"
+        st.success(f"${abs(amount)} has been {action} {username}'s balance")
     conn.commit()
-    action = "added to" if amount > 0 else "deducted from"
-    st.success(f"${abs(amount)} has been {action} {username}'s balance")
 
 def admin_update():
     if st.button("Update!!"):
@@ -433,6 +441,8 @@ def admin_manager():
     username_balance = st.text_input("Enter the username to manage balance:")
     amount = st.number_input("Enter amount to add/deduct (use negative for deduction):", step=100)
     if st.button("Update Balance"):
+        manage_user_balance(username_balance, amount, absv=False)
+    if st.button("Set balance"):
         manage_user_balance(username_balance, amount)
 
 # Update the main function to include the admin page
