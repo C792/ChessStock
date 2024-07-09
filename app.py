@@ -383,7 +383,7 @@ def grant_stocks(username, stock_choice, quantity):
     if stock_choice:
         c = conn.cursor()
         c.execute('INSERT INTO user_stocks VALUES (?, ?, ?)',
-                    (username, stock_choice.name, quantity))
+                    (username, stock_choice.name, load_user_stocks(username)[stock_choice.name] + quantity))
         conn.commit()
         st.success(f"Granted {quantity} of {stock_choice.name} to {username}")
         return
