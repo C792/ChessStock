@@ -96,6 +96,8 @@ class Stock:
             c.execute(f'SELECT timestamp, price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1')
             last_entry = c.fetchone()
             second_last_entry = c.execute(f'SELECT price FROM {self.dbname}_history ORDER BY timestamp DESC LIMIT 1 OFFSET 1').fetchone()
+            if second_last_entry is None:
+                second_last_entry = [-1, -1]
             if not last_entry or last_entry[1] != rating:
                 # Insert the new value
                 self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
