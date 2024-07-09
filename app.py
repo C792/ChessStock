@@ -36,6 +36,7 @@ def load_database():
     file_list = drive.ListFile({'q': "title contains 'stock_data.db' and trashed=false"}).GetList()
     file_list.sort(key=lambda x: x['title'], reverse=True)
     file_list[0].GetContentFile(DATABASE)
+    # close the connection to the database
     return True
 
 if not os.path.exists(DATABASE):
@@ -44,10 +45,8 @@ if not os.path.exists(DATABASE):
         from init import initialize
         initialize()
 
-def get_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_manager()
+cookie_manager = stx.CookieManager()
+# st.write(cookie_manager.get_all())
 
 # Initialize session state for the logged-in user
 if 'logged_in_user' not in st.session_state:
@@ -147,7 +146,7 @@ class Stock:
                 last_price = history[i][1]
         filtered_history.append(history[-1])
         
-        self.db_conn.execute(f'DELETE FROM {self.dbname}_history')
+        c.execute(f'DELETE FROM {self.dbname}_history')
         
         for entry in filtered_history:
             self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', entry)
@@ -190,7 +189,6 @@ def handle_user():
                 st.success(f"Account created for {username} with ${STARTING_MONEY}.")
                 st.session_state['logged_in_user'] = username
                 cookie_manager.set("username", username)
-                st.rerun()
         else:
             stored_password_hash = existing_user[1]
             if stored_password_hash == password_hash:
@@ -198,7 +196,6 @@ def handle_user():
                 st.success(f"Welcome back, {username}!")
                 st.session_state['logged_in_user'] = username
                 cookie_manager.set("username", username)
-                st.rerun()
             else:
                 st.error("Incorrect password. Please try again.")
                 st.text("비밀번호를 잊으셨나요? 관리자에게 문의하세요.")
@@ -264,8 +261,8 @@ def display_portfolio():
 # Function to display the overview of stocks
 def display_overview():
     for stock in STOCKS:
-        rating = stock.update_stock_values()
-        st.write(f"Latest Rating of {stock.name.capitalize()}: {rating}")
+        # rating = stock.update_stock_values()
+        st.write(f"Latest Rating of {stock.name.capitalize()}: {stock.get_rating()}")
         stock.display_stock_history()
 
 # Function to display the ranking of users
@@ -298,14 +295,15 @@ def display_ranking():
 # Function to handle logout
 def handle_logout():
     st.session_state['logged_in_user'] = None
+    global cookie_manager
+    cookie_manager = stx.CookieManager()
     cookie_manager.delete('username')
-    # st.rerun()
+    cookie_manager = stx.CookieManager()
 
 # Function to display account information for admin
 def display_account_info():
     username = st.text_input("Enter the username to retrieve password:")
     if st.button("Retrieve Password"):
-        
         c = conn.cursor()
         c.execute('SELECT password FROM accounts WHERE username=?', (username,))
         user_data = c.fetchone()
@@ -318,7 +316,6 @@ def display_account_info():
 def delete_account():
     username = st.text_input("Enter the username to delete:")
     if st.button("Delete Account"):
-        
         c = conn.cursor()
         c.execute('DELETE FROM accounts WHERE username=?', (username,))
         c.execute('DELETE FROM user_stocks WHERE username=?', (username,))
@@ -409,6 +406,13 @@ def manage_user_balance(username, amount, absv=True):
 def admin_update():
     if st.button("Update!!"):
         st.cache_resource.clear()
+        global conn
+        conn.close()
+        for stock in STOCKS:
+            stock.db_conn.close()
+        for stock in STOCKS:
+            stock.db_conn = get_db_connection()
+        conn = get_db_connection()
         st.success("Updated successfully.")
         schedule_updates()
     if st.button("COMPRESS!!"):
@@ -460,11 +464,13 @@ def main():
         if user == ADMIN_USERNAME:
             global stop_threads
             # stop_threads = True
-            menu = st.sidebar.selectbox("Menu", ["Ranking", "Retrieve Password", "Delete Account", "Change User Password", "Update", "Stock Manager"])
+            menu = st.sidebar.selectbox("Menu", ["Ranking", "Overview", "Retrieve Password", "Delete Account", "Change User Password", "Update", "Stock Manager"])
             if menu == "Retrieve Password":
                 display_account_info()
             elif menu == "Ranking":
                 display_ranking()
+            elif menu == "Overview":
+                display_overview()
             elif menu == "Delete Account":
                 delete_account()
             elif menu == "Change User Password":
