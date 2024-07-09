@@ -17,9 +17,32 @@ STARTING_MONEY = 20000
 ADMIN_USERNAME = "admin"
 DATABASE = 'stock_data.db'
 
+def backup_database():
+    gauth = GoogleAuth()
+    gauth.LoadCredentialsFile("mycreds.txt")
+    
+    drive = GoogleDrive(gauth)
+    gfile = drive.CreateFile({'title': os.path.basename(DATABASE+str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))})
+    gfile.SetContentFile(DATABASE)
+    gfile.Upload()
+    return True
+
+def load_database():
+    gauth = GoogleAuth()
+    gauth.LoadCredentialsFile("mycreds.txt")
+    
+    drive = GoogleDrive(gauth)
+    # from the files with the title such like 'stock_data.db2024-07-09 04:35:31', get the latest one
+    file_list = drive.ListFile({'q': "title contains 'stock_data.db' and trashed=false"}).GetList()
+    file_list.sort(key=lambda x: x['title'], reverse=True)
+    file_list[0].GetContentFile(DATABASE)
+    return True
+
 if not os.path.exists(DATABASE):
-    from init import initialize
-    initialize()
+    load_database()
+    if not os.path.exists(DATABASE):
+        from init import initialize
+        initialize()
 
 def get_manager():
     return stx.CookieManager()
@@ -391,7 +414,9 @@ def admin_update():
             stock.compress_db()
         st.success("Changes filtered and saved successfully.")
     if st.button("Backup Database"):
-        backup_database()
+        if backup_database(): st.success(f"Database backup uploaded to Google Drive successfully.")
+    if st.button("Load Database"):
+        if load_database(): st.success(f"Database loaded from Google Drive successfully.")
 
 
 def admin_manager():
@@ -415,16 +440,6 @@ def admin_manager():
     amount = st.number_input("Enter amount to add/deduct (use negative for deduction):", step=100)
     if st.button("Update Balance"):
         manage_user_balance(username_balance, amount)
-
-def backup_database():
-    gauth = GoogleAuth()
-    gauth.LoadCredentialsFile("mycreds.txt")
-    
-    drive = GoogleDrive(gauth)
-    gfile = drive.CreateFile({'title': os.path.basename(DATABASE+str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))})
-    gfile.SetContentFile(DATABASE)
-    gfile.Upload()
-    st.success(f"Database backup uploaded to Google Drive successfully.")
 
 # Update the main function to include the admin page
 def main():
