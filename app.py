@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import hashlib
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import schedule
 import time
@@ -16,6 +16,9 @@ from pydrive.drive import GoogleDrive
 STARTING_MONEY = 20000
 ADMIN_USERNAME = "admin"
 DATABASE = 'stock_data.db'
+INTEREST_RATE = 0.1
+INTEREST_INTERVAL_DAYS = 7
+MAX_LOAN = 10000
 
 def backup_database():
     gauth = GoogleAuth()
@@ -251,6 +254,22 @@ def display_portfolio():
             st.session_state['logged_in_user'] = username
         else:
             return handle_user()
+    
+    c = conn.cursor()
+    c.execute('SELECT loan_amount, loan_date FROM loans WHERE username=?', (username,))
+    loan_data = c.fetchone()
+    loan_amount = loan_data[0] if loan_data else 0
+    if loan_amount > 0:
+        loan_date = datetime.strptime(loan_data[1], '%Y-%m-%d %H:%M:%S')
+        days_since_loan = (datetime.now() - loan_date).days
+        if days_since_loan >= INTEREST_INTERVAL_DAYS:
+            interest_due = ((days_since_loan // INTEREST_INTERVAL_DAYS) * INTEREST_RATE) * loan_amount
+            st.session_state['accounts'][username]['money'] -= interest_due
+            st.warning(f"Interest of ${interest_due:.2f}({int(INTEREST_RATE * 100)}%) has been deducted from your account.")
+            new_loan_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            c.execute('UPDATE loans SET loan_date=? WHERE username=?', (new_loan_date, username))
+            c.execute('UPDATE accounts SET money=? WHERE username=?', (st.session_state['accounts'][username]['money'], username))
+            conn.commit()
 
     user_data = st.session_state['accounts'][username]
     st.write(f"### {username}님의 포트폴리오")
@@ -298,6 +317,66 @@ def display_ranking():
         towrite = f"{i + 1}. {username}: \${int(total_value)}"
         if own_str: towrite += f"(\${int(money)}, {own_str})"
         st.write(towrite)
+
+def display_bank():
+    username = st.session_state['logged_in_user']
+
+    # Fetch loan details
+    c = conn.cursor()
+    c.execute('SELECT loan_amount, loan_date FROM loans WHERE username=?', (username,))
+    loan_data = c.fetchone()
+    loan_amount = loan_data[0] if loan_data else 0
+    loan_date = datetime.strptime(loan_data[1], '%Y-%m-%d %H:%M:%S') if loan_data else None
+
+    st.subheader("노변김 캐피탈")
+    st.write(f"노변김 캐피탈은 아주 유명한 제3금융권입니다. 이자율은 {int(INTEREST_RATE * 100)}%이며, {INTEREST_INTERVAL_DAYS}일마다 이자를 강탈해갑니다. 당신의 추정 자산의 50%까지만 빌려줄겁니다. 최대 대출액은 ${MAX_LOAN}입니다.")
+    st.write(f"현재 대출: {'$' + str(int(loan_amount)) if loan_amount else '빚이 없습니다!'}")
+
+    # Calculate interest if there's an existing loan
+    if loan_amount > 0:
+        days_since_loan = (datetime.now() - loan_date).days
+        interest_due = ((days_since_loan // INTEREST_INTERVAL_DAYS) * INTEREST_RATE) * loan_amount
+
+        # Forcibly deduct interest if the user logs in
+        if interest_due > 0:
+            st.session_state['accounts'][username]['money'] -= interest_due
+            st.warning(f"Interest of ${interest_due:.2f} has been deducted from your account.")
+            c.execute('UPDATE accounts SET money=? WHERE username=?', 
+                      (st.session_state['accounts'][username]['money'], username))
+            loan_date = loan_date + timedelta(days=(days_since_loan // INTEREST_INTERVAL_DAYS) * INTEREST_INTERVAL_DAYS)
+            c.execute('UPDATE loans SET loan_date=? WHERE username=?', 
+                      (loan_date.strftime('%Y-%m-%d %H:%M:%S'), username))
+            conn.commit()
+
+    # Taking a loan
+    maxloan = st.session_state['accounts'][username]['money'] // 2
+    maxloan = max(maxloan, MAX_LOAN)
+    loan_amount_input = st.number_input(f"대출할 금액을 입력하세요 (최대 ${maxloan}):", min_value=0, max_value=maxloan, step=100)
+    if st.button("대출 시도"):
+        if loan_amount + loan_amount_input > maxloan:
+            st.error(f"최대 대출액은 ${maxloan}입니다. 현재 대출액: ${loan_amount:.2f}")
+        else:
+            if loan_data:
+                c.execute('UPDATE loans SET loan_amount=?, loan_date=? WHERE username=?',
+                          (loan_amount + loan_amount_input, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), username))
+            else:
+                c.execute('INSERT INTO loans (username, loan_amount, loan_date) VALUES (?, ?, ?)',
+                          (username, loan_amount + loan_amount_input, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            st.session_state['accounts'][username]['money'] += loan_amount_input
+            c.execute('UPDATE accounts SET money=? WHERE username=?', 
+                      (st.session_state['accounts'][username]['money'], username))
+            conn.commit()
+            st.success(f"${loan_amount_input}을 노변김 캐피탈에서 빌렸습니다. 몸조심하세요.")
+    
+    # Repaying the loan
+    if loan_amount > 0:
+        if st.button("빚 갚기"):
+            st.session_state['accounts'][username]['money'] -= loan_amount
+            c.execute('UPDATE accounts SET money=? WHERE username=?', 
+                      (st.session_state['accounts'][username]['money'], username))
+            c.execute('DELETE FROM loans WHERE username=?', (username,))
+            conn.commit()
+            st.success(f"{username}는 이제 무료로 해줍니다!")
 
 
 # Function to handle logout
@@ -416,11 +495,20 @@ def admin_update():
     if st.button("Update!!"):
         st.cache_resource.clear()
         global conn
-        conn.close()
         for stock in STOCKS:
             stock.db_conn.close()
         for stock in STOCKS:
             stock.db_conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS loans (
+                username TEXT PRIMARY KEY,
+                loan_amount REAL,
+                loan_date TEXT
+            )
+        ''')
+        conn.commit()
+        conn.close()
         conn = get_db_connection()
         st.success("Updated successfully.")
         schedule_updates()
@@ -489,7 +577,7 @@ def main():
             elif menu == "Stock Manager":
                 admin_manager()
         else:
-            menu = st.sidebar.selectbox("Menu", ["Profile", "Trade", "Overview", "Ranking", "Change Password"])
+            menu = st.sidebar.selectbox("Menu", ["Profile", "Trade", "Overview", "Ranking", "Bank", "Change Password"])
             if menu == "Profile":
                 display_portfolio()
             elif menu == "Trade":
@@ -548,6 +636,8 @@ def main():
                 display_overview()
             elif menu == "Ranking":
                 display_ranking()
+            elif menu == "Bank":
+                display_bank()
             elif menu == "Change Password":
                 change_password()
     else:
