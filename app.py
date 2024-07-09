@@ -418,8 +418,8 @@ def admin_manager():
 
 def backup_database():
     gauth = GoogleAuth()
-    # gauth.LocalWebserverAuth()
-    gauth.CommandLineAuth()
+    gauth.LoadCredentialsFile("mycreds.txt")
+    
     drive = GoogleDrive(gauth)
     gfile = drive.CreateFile({'title': os.path.basename(DATABASE+str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))})
     gfile.SetContentFile(DATABASE)
