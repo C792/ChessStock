@@ -376,12 +376,15 @@ def display_bank():
     # Repaying the loan
     if loan_amount > 0:
         if st.button("빚 갚기"):
-            st.session_state['accounts'][username]['money'] -= loan_amount
-            c.execute('UPDATE accounts SET money=? WHERE username=?', 
-                      (st.session_state['accounts'][username]['money'], username))
-            c.execute('DELETE FROM loans WHERE username=?', (username,))
-            conn.commit()
-            st.success(f"{username}는 이제 무료로 해줍니다!")
+            if st.session_state['accounts'][username]['money'] < loan_amount:
+                st.error("돈이 부족합니다.")
+            else:
+                st.session_state['accounts'][username]['money'] -= loan_amount
+                c.execute('UPDATE accounts SET money=? WHERE username=?', 
+                        (st.session_state['accounts'][username]['money'], username))
+                c.execute('DELETE FROM loans WHERE username=?', (username,))
+                conn.commit()
+                st.success(f"{username}는 이제 무료로 해줍니다!")
 
 
 # Function to handle logout
