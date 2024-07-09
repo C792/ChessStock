@@ -393,7 +393,7 @@ def grant_stocks(username, stock_choice, quantity):
 def manage_user_balance(username, amount):
     c = conn.cursor()
     c.execute('UPDATE accounts SET money=? WHERE username=?', 
-                (st.session_state['accounts'][username]['money'], username))
+                (amount, username))
     conn.commit()
     action = "added to" if amount > 0 else "deducted from"
     st.success(f"${abs(amount)} has been {action} {username}'s balance")
