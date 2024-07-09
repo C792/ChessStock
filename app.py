@@ -248,8 +248,11 @@ def load_all_users():
 def display_portfolio():
     username = st.session_state['logged_in_user']
     if username is None:
-        st.error("You must be logged in to view your portfolio.")
-        return
+        if cookie_manager.get("username"):
+            username = cookie_manager.get("username")
+            st.session_state['logged_in_user'] = username
+        else:
+            return handle_user()
 
     user_data = st.session_state['accounts'][username]
     st.write(f"### Portfolio of {username}")
