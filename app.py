@@ -393,7 +393,6 @@ def grant_stocks(username, stock_choice, quantity):
 # Function to manage user balance
 def manage_user_balance(username, amount):
     c = conn.cursor()
-    st.session_state['accounts'][username]['money'] += amount
     c.execute('UPDATE accounts SET money=? WHERE username=?', 
                 (st.session_state['accounts'][username]['money'], username))
     conn.commit()
