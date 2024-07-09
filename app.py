@@ -245,8 +245,24 @@ def load_all_users():
         accounts[user_data[0]] = {'password': user_data[1], 'money': user_data[2], 'stocks': load_user_stocks(user_data[0])}
     return accounts
 
-# Function to display user portfolio
-def display_portfolio():
+def getloan(username):
+    c = conn.cursor()
+    c.execute('SELECT loan_amount, loan_date FROM loans WHERE username=?', (username,))
+    loan_data = c.fetchone()
+    return loan_data
+
+def getProperty(username):
+    total_value = int(st.session_state['accounts'][username]['money'])
+    for stock_name, quantity in load_user_stocks(username).items():
+        for stock in STOCKS:
+            if stock.name == stock_name:
+                latest_price = stock.get_rating()
+                if latest_price:
+                    total_value += latest_price * quantity
+    return total_value
+
+# Function to display user profile
+def display_profile():
     username = st.session_state['logged_in_user']
     if username is None:
         if cookie_manager.get("username"):
@@ -254,10 +270,8 @@ def display_portfolio():
             st.session_state['logged_in_user'] = username
         else:
             return handle_user()
-    
-    c = conn.cursor()
-    c.execute('SELECT loan_amount, loan_date FROM loans WHERE username=?', (username,))
-    loan_data = c.fetchone()
+
+    loan_data = getloan(username)
     loan_amount = loan_data[0] if loan_data else 0
     if loan_amount > 0:
         loan_date = datetime.strptime(loan_data[1], '%Y-%m-%d %H:%M:%S')
@@ -267,6 +281,7 @@ def display_portfolio():
             st.session_state['accounts'][username]['money'] -= interest_due
             st.warning(f"Interest of ${interest_due:.2f}({int(INTEREST_RATE * 100)}%) has been deducted from your account.")
             new_loan_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            c = conn.cursor()
             c.execute('UPDATE loans SET loan_date=? WHERE username=?', (new_loan_date, username))
             c.execute('UPDATE accounts SET money=? WHERE username=?', (st.session_state['accounts'][username]['money'], username))
             conn.commit()
@@ -274,13 +289,11 @@ def display_portfolio():
     user_data = st.session_state['accounts'][username]
     st.write(f"### {username}님의 포트폴리오")
     total_value = int(user_data['money'])
-    for stock_name, quantity in load_user_stocks(username).items():
-        for stock in STOCKS:
-            if stock.name == stock_name:
-                latest_price = stock.get_rating()
-                if latest_price:
-                    total_value += latest_price * quantity
-    st.write(f"#### 보유금액: \${int(user_data['money'])}, 자산: \${total_value}")
+    total_value = getProperty(username)
+    towrite = f"#### 보유금액: \${int(user_data['money'])}, 자산: \${total_value}"
+    if loan_amount > 0:
+        towrite += f", 빚: \${int(loan_amount)}"
+    st.write(towrite)
     st.write("**자산 목록:**")
     for stock_name, quantity in user_data['stocks'].items():
         st.write(f"- {stock_name}: {quantity} shares")
@@ -313,7 +326,11 @@ def display_ranking():
     ranking_data.sort(key=lambda x: (x[1], x[3]), reverse=True)
     st.write("User Rankings:")
     for i, (username, total_value, owned, money) in enumerate(ranking_data):
-        own_str = ', '.join(f'{n.split()[0]} {owned[n]}' for n in owned if owned[n])
+        own_str = ''
+        if getloan(username) and getloan(username)[0] > 0:
+            own_str += f'빚 ${int(getloan(username)[0])}, '
+        own_str += ', '.join(f'{n.split()[0]} {owned[n]}' for n in owned if owned[n])
+        if own_str and own_str[-1] == ' ': own_str = own_str[:-2]
         towrite = f"{i + 1}. {username}: \${int(total_value)}"
         if own_str: towrite += f"(\${int(money)}, {own_str})"
         st.write(towrite)
@@ -322,9 +339,7 @@ def display_bank():
     username = st.session_state['logged_in_user']
 
     # Fetch loan details
-    c = conn.cursor()
-    c.execute('SELECT loan_amount, loan_date FROM loans WHERE username=?', (username,))
-    loan_data = c.fetchone()
+    loan_data = getloan(username)
     loan_amount = loan_data[0] if loan_data else 0
     loan_date = datetime.strptime(loan_data[1], '%Y-%m-%d %H:%M:%S') if loan_data else None
 
@@ -335,27 +350,17 @@ def display_bank():
     # Calculate interest if there's an existing loan
     if loan_amount > 0:
         days_since_loan = (datetime.now() - loan_date).days
-        interest_due = ((days_since_loan // INTEREST_INTERVAL_DAYS) * INTEREST_RATE) * loan_amount
-
-        # Forcibly deduct interest if the user logs in
-        if interest_due > 0:
-            st.session_state['accounts'][username]['money'] -= interest_due
-            st.warning(f"Interest of ${interest_due:.2f} has been deducted from your account.")
-            c.execute('UPDATE accounts SET money=? WHERE username=?', 
-                      (st.session_state['accounts'][username]['money'], username))
-            loan_date = loan_date + timedelta(days=(days_since_loan // INTEREST_INTERVAL_DAYS) * INTEREST_INTERVAL_DAYS)
-            c.execute('UPDATE loans SET loan_date=? WHERE username=?', 
-                      (loan_date.strftime('%Y-%m-%d %H:%M:%S'), username))
-            conn.commit()
+        st.warning(f"대출일로부터 {days_since_loan}일이 지났습니다. 몸조심하세요.")
 
     # Taking a loan
-    maxloan = st.session_state['accounts'][username]['money'] // 2
-    maxloan = max(maxloan, MAX_LOAN)
+    maxloan = int(getProperty(username) - loan_amount) // 2 - int(loan_amount)
+    maxloan = min(maxloan, MAX_LOAN)
     loan_amount_input = st.number_input(f"대출할 금액을 입력하세요 (최대 ${maxloan}):", min_value=0, max_value=maxloan, step=100)
     if st.button("대출 시도"):
         if loan_amount + loan_amount_input > maxloan:
             st.error(f"최대 대출액은 ${maxloan}입니다. 현재 대출액: ${loan_amount:.2f}")
         else:
+            c = conn.cursor()
             if loan_data:
                 c.execute('UPDATE loans SET loan_amount=?, loan_date=? WHERE username=?',
                           (loan_amount + loan_amount_input, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), username))
@@ -495,20 +500,11 @@ def admin_update():
     if st.button("Update!!"):
         st.cache_resource.clear()
         global conn
+        conn.close()
         for stock in STOCKS:
             stock.db_conn.close()
         for stock in STOCKS:
             stock.db_conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS loans (
-                username TEXT PRIMARY KEY,
-                loan_amount REAL,
-                loan_date TEXT
-            )
-        ''')
-        conn.commit()
-        conn.close()
         conn = get_db_connection()
         st.success("Updated successfully.")
         schedule_updates()
@@ -579,7 +575,7 @@ def main():
         else:
             menu = st.sidebar.selectbox("Menu", ["Profile", "Trade", "Overview", "Ranking", "Bank", "Change Password"])
             if menu == "Profile":
-                display_portfolio()
+                display_profile()
             elif menu == "Trade":
                 stock_choice = st.selectbox("Select stock to trade", [stock.name for stock in STOCKS])
                 current_st = None
