@@ -420,7 +420,7 @@ def backup_database():
     gauth = GoogleAuth()
     gauth.LocalWebserverAuth()
     drive = GoogleDrive(gauth)
-    gfile = drive.CreateFile({'title': os.path.basename(DATABASE)})
+    gfile = drive.CreateFile({'title': os.path.basename(DATABASE+str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))})
     gfile.SetContentFile(DATABASE)
     gfile.Upload()
     st.success(f"Database backup uploaded to Google Drive successfully.")
