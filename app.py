@@ -498,6 +498,7 @@ def main():
                 for sst in STOCKS:
                     if sst.name == stock_choice:
                         current_st = sst
+                        sst.update_stock_values()
                         buy_price = sst.get_rating()
                 st.subheader(f"현재 {stock_choice} 가격: {buy_price}")
                 st.write(f"Current Balance: ${int(st.session_state['accounts'][user]['money'])}")
