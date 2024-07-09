@@ -98,14 +98,14 @@ class Stock:
             last_entry = c.fetchone()
 
             if not last_entry or last_entry[1] != rating:
-                if last_entry:
-                    # Update the timestamp of the last same value entry before the change
-                    self.db_conn.execute(f'UPDATE {self.dbname}_history SET timestamp = ? WHERE timestamp = ?',
-                                         (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), last_entry[0]))
                 # Insert the new value
                 self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
                                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
                 self.db_conn.commit()
+            elif last_entry[1] == rating:
+                # Update the timestamp of the last same value entry before the change
+                self.db_conn.execute(f'UPDATE {self.dbname}_history SET timestamp = ? WHERE timestamp = ?',
+                                        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), last_entry[0]))
         return rating
 
     def get_rating(self):
