@@ -383,10 +383,6 @@ def clear_user_stocks(username):
 def grant_stocks(username, stock_choice, quantity):
     if stock_choice:
         c = conn.cursor()
-        if stock_choice.name in st.session_state['accounts'][username]['stocks']:
-            st.session_state['accounts'][username]['stocks'][stock_choice.name] += quantity
-        else:
-            st.session_state['accounts'][username]['stocks'][stock_choice.name] = quantity
         c.execute('INSERT INTO user_stocks VALUES (?, ?, ?)',
                     (username, stock_choice.name, quantity))
         conn.commit()
