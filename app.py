@@ -354,7 +354,7 @@ def display_bank():
 
     # Taking a loan
     maxloan = int(getProperty(username) - loan_amount) // 2 - int(loan_amount)
-    maxloan = min(maxloan, MAX_LOAN)
+    maxloan = max(min(maxloan, MAX_LOAN), 0)
     loan_amount_input = st.number_input(f"대출할 금액을 입력하세요 (최대 ${maxloan}):", min_value=0, max_value=maxloan, step=100)
     if st.button("대출 시도"):
         if loan_amount + loan_amount_input > maxloan:
