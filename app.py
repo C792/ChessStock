@@ -380,6 +380,7 @@ def display_bank():
                 st.error("돈이 부족합니다.")
             else:
                 st.session_state['accounts'][username]['money'] -= loan_amount
+                c = conn.cursor()
                 c.execute('UPDATE accounts SET money=? WHERE username=?', 
                         (st.session_state['accounts'][username]['money'], username))
                 c.execute('DELETE FROM loans WHERE username=?', (username,))
