@@ -16,7 +16,7 @@ from pydrive.drive import GoogleDrive
 STARTING_MONEY = 20000
 ADMIN_USERNAME = "admin"
 DATABASE = 'stock_data.db'
-INTEREST_RATE = 0.1
+INTEREST_RATE = 0.05
 INTEREST_INTERVAL_DAYS = 3
 MAX_LOAN = 10000
 
