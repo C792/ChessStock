@@ -17,7 +17,7 @@ STARTING_MONEY = 20000
 ADMIN_USERNAME = "admin"
 DATABASE = 'stock_data.db'
 INTEREST_RATE = 0.1
-INTEREST_INTERVAL_DAYS = 7
+INTEREST_INTERVAL_DAYS = 3
 MAX_LOAN = 10000
 
 def backup_database():
@@ -277,9 +277,9 @@ def display_profile():
         loan_date = datetime.strptime(loan_data[1], '%Y-%m-%d %H:%M:%S')
         days_since_loan = (datetime.now() - loan_date).days
         if days_since_loan >= INTEREST_INTERVAL_DAYS:
-            interest_due = ((days_since_loan // INTEREST_INTERVAL_DAYS) * INTEREST_RATE) * loan_amount
+            interest_due = int(((days_since_loan // INTEREST_INTERVAL_DAYS) * INTEREST_RATE) * loan_amount)
             st.session_state['accounts'][username]['money'] -= interest_due
-            st.warning(f"Interest of ${interest_due:.2f}({int(INTEREST_RATE * 100)}%) has been deducted from your account.")
+            st.warning(f"이자로 ${int(interest_due)}({int(INTEREST_RATE * 100)}%, {days_since_loan}일)를 뜯어갔습니다.")
             new_loan_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             c = conn.cursor()
             c.execute('UPDATE loans SET loan_date=? WHERE username=?', (new_loan_date, username))
