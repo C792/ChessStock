@@ -476,8 +476,11 @@ def clear_user_stocks(username):
 def grant_stocks(username, stock_choice, quantity):
     if stock_choice:
         c = conn.cursor()
+        curr_st = 0
+        try: curr_st = load_user_stocks(username)[stock_choice.name]
+        except: pass
         c.execute('INSERT INTO user_stocks VALUES (?, ?, ?)',
-                    (username, stock_choice.name, load_user_stocks(username)[stock_choice.name] + quantity))
+                    (username, stock_choice.name, curr_st + quantity))
         conn.commit()
         st.success(f"Granted {quantity} of {stock_choice.name} to {username}")
         return
