@@ -154,6 +154,31 @@ class Stock:
         
         self.db_conn.commit()
 
+class Futures(Stock):
+    def __init__(self, name, dbname, game_info, table, adjustment=0):
+        self.name = name
+        self.games = [
+            (f"https://api.chess.com/pub/player/{username}/stats", gametype) for username, gametype in game_info
+        ]
+        self.dbname = dbname
+        self.table = table
+        self.adjustment = adjustment
+        self.db_conn = get_db_connection()
+        self.create_tables()
+
+    def fetch_latest_rating(self):
+        ratings = []
+        try:
+            for api_url, gametype in self.games:
+                response = requests.get(api_url, headers={"User-Agent": "Mozilla/5.0"})
+                data = response.json()
+                if data[f'chess_{gametype}']['last']['rating']:
+                    ratings.append(data[f'chess_{gametype}']['last']['rating'])
+        except Exception as e:
+            st.error(f"Error fetching data: {e}")
+            return None
+        return sum(r * x for r, x in zip(ratings, self.table)) + self.adjustment
+
 # Initialize the stocks
 STOCKS = [
     Stock('임재휘 불렛', 'bullet', "limbaksa"),
@@ -161,6 +186,7 @@ STOCKS = [
     Stock('변상훈 래피드', 'rapid', "ekdn55"),
     Stock('조현욱 불렛', 'bullet', "telperion0715"),
     Stock('송이안 불렛', 'bullet', "tookavooo"),
+    Futures('빡송 합작', 'ppagsong', [("tookavooo", "bullet"), ("ppagse", "rapid")], [1, 1], -1500)
 ]
 
 # Function to hash passwords
@@ -580,8 +606,13 @@ def main():
             elif menu == "Stock Manager":
                 admin_manager()
         else:
-            menu = st.sidebar.selectbox("Menu", ["Profile", "Trade", "Overview", "Ranking", "Bank", "Change Password"])
-            if menu == "Profile":
+            menu = st.sidebar.selectbox("Menu", ["Notice", "Profile", "Trade", "Overview", "Ranking", "Bank", "Change Password"])
+            if menu == "Notice":
+                st.write("국가권력급 인재인 송이안님께서 개발해낸 주식 시뮬레이터입니다. 주식의 가격은 chess.com에서의 실제 체스 레이팅을 기반으로 합니다. 가끔 새로운 종목 등을 업데이트합니다.")
+                st.write("레이팅을 직접 반영하는 주식 종목과 파생금융상품이 있습니다.")
+                st.write("빡송합작은 아래 식으로 레이팅이 계산됩니다.")
+                st.latex(r'rapid_{ppagse} + bullet_{tookavooo} - 1500')
+            elif menu == "Profile":
                 display_profile()
             elif menu == "Trade":
                 stock_choice = st.selectbox("Select stock to trade", [stock.name for stock in STOCKS])
