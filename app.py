@@ -185,7 +185,7 @@ STOCKS = [
     Stock('송이안 블리츠', 'blitz', "tookavooo"),
     Stock('변상훈 래피드', 'rapid', "ekdn55"),
     Stock('조현욱 불렛', 'bullet', "telperion0715"),
-    Stock('송이안 불렛', 'bullet', "tookavooo"),
+    #Stock('송이안 불렛', 'bullet', "tookavooo"),
     Futures('빡송 합작', 'ppagsong', [("tookavooo", "bullet"), ("ppagse", "rapid")], [1, 1], -1500)
 ]
 
