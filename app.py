@@ -22,7 +22,12 @@ MAX_LOAN = 10000
 
 def backup_database():
     gauth = GoogleAuth()
-    gauth.LoadCredentialsFile("mycreds.txt")
+    if os.path.exists("mycreds.txt"):
+        gauth.LoadCredentialsFile("mycreds.txt")
+    else:
+        print("!")
+        gauth.LocalWebserverAuth()
+        gauth.SaveCredentialsFile("mycreds.txt")
     
     drive = GoogleDrive(gauth)
     gfile = drive.CreateFile({'title': os.path.basename(DATABASE+str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))})
@@ -35,7 +40,6 @@ def load_database():
     gauth.LoadCredentialsFile("mycreds.txt")
     
     drive = GoogleDrive(gauth)
-    # from the files with the title such like 'stock_data.db2024-07-09 04:35:31', get the latest one
     file_list = drive.ListFile({'q': "title contains 'stock_data.db' and trashed=false"}).GetList()
     file_list.sort(key=lambda x: x['title'], reverse=True)
     file_list[0].GetContentFile(DATABASE)
@@ -549,6 +553,11 @@ def admin_update():
         if backup_database(): st.success(f"Database backup uploaded to Google Drive successfully.")
     if st.button("Load Database"):
         if load_database(): st.success(f"Database loaded from Google Drive successfully.")
+    if st.button("Save Creds"):
+        gauth = GoogleAuth()
+        gauth.LocalWebserverAuth()
+        gauth.SaveCredentialsFile("mycreds.txt")
+        st.success("Credentials saved successfully.")
 
 
 def admin_manager():
