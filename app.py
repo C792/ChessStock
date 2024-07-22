@@ -110,6 +110,9 @@ class Stock:
             elif last_entry[1] == rating == second_last_entry[1]:
                 self.db_conn.execute(f'UPDATE {self.dbname}_history SET timestamp = ? WHERE timestamp = ?',
                                         (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), last_entry[0]))
+            elif last_entry[1] == rating != second_last_entry[1]:
+                self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
+                                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
             self.db_conn.commit()
         return rating
 
@@ -146,7 +149,7 @@ class Stock:
         
         for i in range(1, len(history)):
             if history[i][1] != last_price:
-                filtered_history.append(history[i - 1])
+                filtered_history.append((history[i][0], history[i - 1][1]))
                 filtered_history.append(history[i])
                 last_price = history[i][1]
         filtered_history.append(history[-1])
