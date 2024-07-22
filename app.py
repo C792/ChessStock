@@ -548,7 +548,7 @@ def admin_update():
         conn = get_db_connection()
         st.success("Updated successfully.")
         schedule_updates()
-    if st.button("COMPRESS!!"):
+    if st.button("COMPRESS!!!"):
         for stock in STOCKS:
             stock.compress_db()
         st.success("Changes filtered and saved successfully.")
