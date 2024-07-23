@@ -106,6 +106,8 @@ class Stock:
             if second_last_entry is None: second_last_entry = [-1, -1]
             if not last_entry or last_entry[1] != rating:
                 self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
+                                    ((datetime.now()-timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S"), last_entry[1]))
+                self.db_conn.execute(f'INSERT INTO {self.dbname}_history (timestamp, price) VALUES (?, ?)', 
                                     (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), rating))
             elif last_entry[1] == rating == second_last_entry[1]:
                 self.db_conn.execute(f'UPDATE {self.dbname}_history SET timestamp = ? WHERE timestamp = ?',
