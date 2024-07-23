@@ -620,6 +620,13 @@ def main():
         else:
             menu = st.sidebar.selectbox("Menu", ["Notice", "Profile", "Trade", "Overview", "Ranking", "Bank", "Change Password"])
             if menu == "Notice":
+                username = st.session_state['logged_in_user']
+                if username is None:
+                    if cookie_manager.get("username"):
+                        username = cookie_manager.get("username")
+                        st.session_state['logged_in_user'] = username
+                    else:
+                        return handle_user()
                 st.write("국가권력급 인재인 송이안님께서 개발해낸 주식 시뮬레이터입니다. 주식의 가격은 chess.com에서의 실제 체스 레이팅을 기반으로 합니다. 가끔 새로운 종목 등을 업데이트합니다.")
                 st.write("레이팅을 직접 반영하는 주식 종목과 파생금융상품이 있습니다.")
                 st.write("빡송합작은 아래 식으로 레이팅이 계산됩니다.")
