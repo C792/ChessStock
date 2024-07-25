@@ -43,7 +43,6 @@ def load_database():
     file_list = drive.ListFile({'q': "title contains 'stock_data.db' and trashed=false"}).GetList()
     file_list.sort(key=lambda x: x['title'], reverse=True)
     file_list[0].GetContentFile(DATABASE)
-    # close the connection to the database
     return True
 
 if not os.path.exists(DATABASE):
