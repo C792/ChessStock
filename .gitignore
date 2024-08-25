@@ -9,3 +9,4 @@ __pycache__/
 .devcontainer/
 credentials.json
 .streamlit/*
+mycreds.txt
